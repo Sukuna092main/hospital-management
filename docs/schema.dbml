@@ -1,0 +1,334 @@
+Project HospitalManagementSystem {
+  Note: '''
+  5 service, mỗi TableGroup = 1 database riêng.
+  Trường có note "ref -> ..." là tham chiếu logic (khác service, lưu ID, không FK thật).
+  Trường có ref: > là FK thật (2 bảng cùng nằm trong 1 service/database).
+  '''
+}
+
+Enum user_status {
+  ACTIVE
+  INACTIVE
+  BANNED
+}
+
+Enum oauth_provider {
+  GOOGLE
+  FACEBOOK
+}
+
+Enum appointment_status {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  COMPLETED
+  CANCELLED
+}
+
+Enum invoice_status {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+Enum payment_status {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+Enum notification_channel {
+  EMAIL
+  SMS
+  PUSH
+}
+
+Enum message_role {
+  USER
+  BOT
+}
+
+// ===================== 1. IDENTITY SERVICE (PostgreSQL + Redis) =====================
+Table users {
+  id uuid [pk]
+  email varchar [unique, not null]
+  password_hash varchar [null, note: 'null nếu tài khoản chỉ đăng nhập qua OAuth']
+  status user_status
+  created_at timestamp
+}
+
+Table roles {
+  id int [pk, increment]
+  name varchar [note: 'PATIENT | DOCTOR | NURSE | PHARMACIST | ADMIN']
+}
+
+Table user_roles {
+  user_id uuid [ref: > users.id]
+  role_id int [ref: > roles.id]
+}
+
+Table oauth_accounts {
+  id uuid [pk]
+  user_id uuid [ref: > users.id]
+  provider oauth_provider
+  provider_user_id varchar
+  email varchar
+  linked_at timestamp
+
+  Indexes {
+    (provider, provider_user_id) [unique]
+  }
+}
+
+Table audit_logs {
+  id uuid [pk]
+  user_id uuid [ref: > users.id, note: 'giờ là FK thật vì audit_logs và users cùng service']
+  action varchar [note: 'VIEW | CREATE | UPDATE | DELETE | CANCEL | DISPENSE...']
+  resource_type varchar [note: 'MEDICAL_RECORD | APPOINTMENT | USER | INVOICE...']
+  resource_id varchar [note: 'id của resource ở service tương ứng, có thể khác service']
+  metadata jsonb
+  created_at timestamp
+}
+
+TableGroup identity_service {
+  users
+  roles
+  user_roles
+  oauth_accounts
+  audit_logs
+}
+
+// ===================== 2. SCHEDULING SERVICE (PostgreSQL) =====================
+Table patients {
+  id uuid [pk]
+  user_id uuid [note: 'ref -> Identity Service.users.id']
+  full_name varchar
+  dob date
+  gender varchar
+  phone varchar
+  address varchar
+  insurance_number varchar
+  emergency_contact_name varchar
+  emergency_contact_phone varchar
+  deleted_at timestamp [null]
+  created_at timestamp
+}
+
+Table departments {
+  id int [pk, increment]
+  name varchar
+  location varchar
+}
+
+Table doctors {
+  id uuid [pk]
+  user_id uuid [note: 'ref -> Identity Service.users.id']
+  full_name varchar
+  specialty varchar
+  license_number varchar
+  department_id int [ref: > departments.id]
+  status varchar [note: 'ON_DUTY | OFF']
+}
+
+Table staff {
+  id uuid [pk]
+  user_id uuid [note: 'ref -> Identity Service.users.id']
+  full_name varchar
+  role varchar [note: 'NURSE | TECHNICIAN']
+  department_id int [ref: > departments.id]
+}
+
+Table schedules {
+  id uuid [pk]
+  doctor_id uuid [ref: > doctors.id]
+  date date
+  start_time time
+  end_time time
+  slot_duration int
+}
+
+Table appointments {
+  id uuid [pk]
+  patient_id uuid [ref: > patients.id, note: 'giờ là FK thật — cùng service với patients']
+  doctor_id uuid [ref: > doctors.id, note: 'giờ là FK thật — cùng service với doctors']
+  scheduled_at timestamp
+  status appointment_status
+  reason varchar
+  created_at timestamp
+}
+
+Table appointment_status_history {
+  id uuid [pk]
+  appointment_id uuid [ref: > appointments.id]
+  old_status varchar
+  new_status varchar
+  changed_by uuid [note: 'ref -> Identity Service.users.id']
+  changed_at timestamp
+}
+
+TableGroup scheduling_service {
+  patients
+  departments
+  doctors
+  staff
+  schedules
+  appointments
+  appointment_status_history
+}
+
+// ===================== 3. CLINICAL SERVICE (MongoDB) =====================
+Table records {
+  id varchar [pk, note: 'MongoDB ObjectId']
+  patient_id uuid [note: 'ref -> Scheduling Service.patients.id']
+  doctor_id uuid [note: 'ref -> Scheduling Service.doctors.id']
+  appointment_id uuid [note: 'ref -> Scheduling Service.appointments.id']
+  visit_date date
+  diagnosis_icd10 varchar
+  diagnosis_description varchar
+  notes text
+  created_at timestamp
+  Note: 'Document MongoDB — vitals{}, prescriptions[], attachments[] EMBEDDED trong records, không phải collection riêng'
+}
+
+Table prescriptions {
+  id varchar [pk, note: 'id item trong mảng records.prescriptions[] — chỉ minh họa, không phải bảng thật']
+  record_id varchar [note: 'embedded, không phải FK thật']
+  medication_id uuid [note: 'ref -> Resource Service.medications.id']
+  name varchar [note: 'snapshot tên thuốc tại thời điểm kê']
+  dosage varchar
+  quantity int
+  unit_price decimal [note: 'snapshot giá tại thời điểm kê']
+  instructions varchar
+}
+
+TableGroup clinical_service {
+  records
+  prescriptions
+}
+
+// ===================== 4. RESOURCE SERVICE (PostgreSQL) =====================
+Table medications {
+  id uuid [pk]
+  name varchar
+  sku varchar [unique]
+  unit varchar
+  price decimal
+  description varchar
+}
+
+Table inventory_batches {
+  id uuid [pk]
+  medication_id uuid [ref: > medications.id]
+  batch_number varchar
+  stock_quantity int
+  reorder_threshold int
+  expiry_date date
+}
+
+Table dispense_records {
+  id uuid [pk]
+  prescription_id varchar [note: 'ref -> Clinical Service.records.prescriptions[].id']
+  medication_id uuid [ref: > medications.id]
+  batch_id uuid [ref: > inventory_batches.id]
+  quantity int
+  dispensed_by uuid [note: 'ref -> Scheduling Service.staff.id']
+  dispensed_at timestamp
+}
+
+Table invoices {
+  id uuid [pk]
+  patient_id uuid [note: 'ref -> Scheduling Service.patients.id']
+  appointment_id uuid [note: 'ref -> Scheduling Service.appointments.id']
+  subtotal decimal
+  insurance_covered decimal
+  patient_payable decimal
+  status invoice_status
+  created_at timestamp
+}
+
+Table invoice_items {
+  id uuid [pk]
+  invoice_id uuid [ref: > invoices.id]
+  item_type varchar [note: 'CONSULTATION | LAB | MEDICATION | ROOM']
+  description varchar [note: 'snapshot mô tả']
+  amount decimal [note: 'snapshot giá']
+  source_type varchar [note: 'MEDICATION | LAB | ROOM | CONSULTATION']
+  source_id varchar [note: 'nếu MEDICATION thì trùng medications.id (cùng service); loại khác vẫn là ref ngoài']
+}
+
+Table payments {
+  id uuid [pk]
+  invoice_id uuid [ref: > invoices.id]
+  amount decimal
+  method varchar [note: 'CASH | CARD | EWALLET']
+  transaction_ref varchar
+  status payment_status
+  paid_at timestamp
+}
+
+Table refunds {
+  id uuid [pk]
+  payment_id uuid [ref: > payments.id]
+  amount decimal
+  reason varchar
+  refunded_at timestamp
+}
+
+TableGroup resource_service {
+  medications
+  inventory_batches
+  dispense_records
+  invoices
+  invoice_items
+  payments
+  refunds
+}
+
+// ===================== 5. ENGAGEMENT SERVICE (PostgreSQL) =====================
+Table notifications {
+  id uuid [pk]
+  user_id uuid [note: 'ref -> Identity Service.users.id']
+  channel notification_channel
+  event_type varchar
+  content text
+  status varchar [note: 'SENT | FAILED']
+  sent_at timestamp
+}
+
+Table notification_templates {
+  id uuid [pk]
+  event_type varchar
+  channel notification_channel
+  template_body text
+}
+
+Table faqs {
+  id uuid [pk]
+  category varchar [note: 'GIO_KHAM | THU_TUC | BAO_HIEM | KHOA_PHONG']
+  question varchar
+  answer text
+  updated_at timestamp
+}
+
+Table conversations {
+  id uuid [pk]
+  user_id uuid [note: 'ref -> Identity Service.users.id, null nếu ẩn danh']
+  started_at timestamp
+}
+
+Table messages {
+  id uuid [pk]
+  conversation_id uuid [ref: > conversations.id]
+  role message_role
+  content text
+  created_at timestamp
+}
+
+TableGroup engagement_service {
+  notifications
+  notification_templates
+  faqs
+  conversations
+  messages
+}
