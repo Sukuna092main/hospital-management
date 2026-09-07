@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BANNED
+}
+
+enum OauthProvider {
+  GOOGLE
+  FACEBOOK
+}
+
+model User {
+  id           String         @id @default(uuid()) @db.Uuid
+  email        String         @unique
+  passwordHash String?        @map("password_hash")
+  status       UserStatus     @default(ACTIVE)
+  createdAt    DateTime       @default(now()) @map("created_at")
+  roles        UserRole[]
+  oauths       OauthAccount[]
+  audits       AuditLog[]
+
+  @@map("users")
+}
+
+model Role {
+  id    Int        @id @default(autoincrement())
+  name  String     // PATIENT | DOCTOR | NURSE | PHARMACIST | ADMIN
+  users UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  userId String @map("user_id") @db.Uuid
+  roleId Int    @map("role_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model OauthAccount {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String        @map("user_id") @db.Uuid
+  provider       OauthProvider
+  providerUserId String        @map("provider_user_id")
+  email          String?
+  linkedAt       DateTime      @default(now()) @map("linked_at")
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@map("oauth_accounts")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  action       String   // VIEW | CREATE | UPDATE | DELETE | CANCEL | DISPENSE...
+  resourceType String   @map("resource_type")
+  resourceId   String   @map("resource_id")
+  metadata     Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
