@@ -121,6 +121,9 @@ importers:
 
   apps/identity-service:
     dependencies:
+      '@hospital/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
       '@prisma/client':
         specifier: ^6.19.3
         version: 6.19.3(prisma@6.19.3(typescript@7.0.2))(typescript@7.0.2)
