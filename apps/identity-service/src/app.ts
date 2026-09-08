@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import authRoutes from "./routes/auth.routes.js";
+import { errorHandler } from "./middlewares/error-handler.middleware.js";
 
 export function createApp() {
     const app = express();
@@ -10,14 +12,13 @@ export function createApp() {
     app.use(morgan("dev"));
     app.use(express.json());
 
-    app.get("/health", (req, res) => {
-        res.status(200).json({ status: "ok" });
+    app.get("/health", (_req, res) => {
+        res.json({ status: "ok", service: "identity-service" });
     });
 
-    app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-        console.error(err);
-        res.status(500).json({ error: "Internal Server Error" });
-    });
+    app.use("/api/v1/auth", authRoutes);
+
+    app.use(errorHandler);
 
     return app;
 }

@@ -7,7 +7,8 @@ export const registerSchema = z.object({
     phone: z
         .string()
         .trim()
-        .regex(/^0\d{9}$/, 'Phone must contain exactly 10 digits and start with 0'),
+        .regex(/^0\d{9}$/, 'Phone must contain exactly 10 digits and start with 0')
+        .optional(),
 });
 
 export const loginSchema = z.object({
@@ -15,5 +16,10 @@ export const loginSchema = z.object({
     password: z.string().min(8, 'Password must be at least 8 characters long'),
 });
 
+export const refreshSchema = z.object({
+  refreshToken: z.string().min(1, 'Missing refresh token'),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type RefreshInput = z.infer<typeof refreshSchema>;
