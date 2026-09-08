@@ -4,7 +4,7 @@ import type { UserRoleName } from '@hospital/shared-types';
 import { prisma } from '../lib/prisma.js';
 import { httpError } from '../lib/http-error.js';
 import { writeAudit } from './audit.service.js';
-import type { LoginInput, RefreshInput, RegisterInput } from '../schemas/auth.schemas.ts';
+import type { LoginInput, RefreshInput, RegisterInput } from '../schemas/auth.schema.js';
 
 // TTL tính bằng giây (tránh lỗi type của jsonwebtoken khi dùng chuỗi '15m' qua biến env)
 const ACCESS_TTL = Number(process.env.JWT_ACCESS_TTL ?? 900); // 15 phút
