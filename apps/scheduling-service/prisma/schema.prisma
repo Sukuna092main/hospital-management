@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  COMPLETED
+  CANCELLED
+}
+
+model Patient {
+  id                    String        @id @default(uuid()) @db.Uuid
+  userId                String        @map("user_id") @db.Uuid // ref -> Identity Service.users.id (lưu ID, không FK)
+  fullName              String        @map("full_name")
+  dob                   DateTime      @map("dob") @db.Date
+  gender                String
+  phone                 String
+  address               String
+  nationalId            String?       @map("national_id") // CCCD, optional
+  insuranceNumber       String?       @map("insurance_number")
+  emergencyContactName  String?       @map("emergency_contact_name")
+  emergencyContactPhone String?       @map("emergency_contact_phone")
+  deletedAt             DateTime?     @map("deleted_at") // soft delete: còn dòng nhưng ẩn khỏi list
+  createdAt             DateTime      @default(now()) @map("created_at")
+  appointments          Appointment[]
+
+  @@map("patients")
+}
+
+model Department {
+  id       Int      @id @default(autoincrement())
+  name     String
+  location String
+  doctors  Doctor[]
+  staff    Staff[]
+
+  @@map("departments")
+}
+
+model Doctor {
+  id            String        @id @default(uuid()) @db.Uuid
+  userId        String        @map("user_id") @db.Uuid // ref -> Identity Service.users.id
+  fullName      String        @map("full_name")
+  specialty     String
+  licenseNumber String        @map("license_number")
+  departmentId  Int           @map("department_id")
+  department    Department    @relation(fields: [departmentId], references: [id])
+  status        String        @default("ON_DUTY") // ON_DUTY | OFF
+  schedules     Schedule[]
+  appointments  Appointment[]
+
+  @@map("doctors")
+}
+
+model Staff {
+  id           String     @id @default(uuid()) @db.Uuid
+  userId       String     @map("user_id") @db.Uuid // ref -> Identity Service.users.id
+  fullName     String     @map("full_name")
+  role         String     // NURSE | TECHNICIAN
+  departmentId Int        @map("department_id")
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  @@map("staff")
+}
+
+model Schedule {
+  id           String   @id @default(uuid()) @db.Uuid
+  doctorId     String   @map("doctor_id") @db.Uuid
+  doctor       Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  date         DateTime @db.Date
+  startTime    DateTime @map("start_time") @db.Time
+  endTime      DateTime @map("end_time") @db.Time
+  slotDuration Int      @map("slot_duration") // độ dài 1 slot, tính bằng phút
+
+  @@map("schedules")
+}
+
+model Appointment {
+  id          String            @id @default(uuid()) @db.Uuid
+  patientId   String            @map("patient_id") @db.Uuid
+  patient     Patient           @relation(fields: [patientId], references: [id])
+  doctorId    String            @map("doctor_id") @db.Uuid
+  doctor      Doctor            @relation(fields: [doctorId], references: [id])
+  scheduledAt DateTime          @map("scheduled_at")
+  status      AppointmentStatus @default(PENDING)
+  reason      String?
+  createdAt   DateTime          @default(now()) @map("created_at")
+  history     AppointmentStatusHistory[]
+
+  @@map("appointments")
+}
+
+model AppointmentStatusHistory {
+  id            String      @id @default(uuid()) @db.Uuid
+  appointmentId String      @map("appointment_id") @db.Uuid
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  oldStatus     String?     @map("old_status") // null khi tạo mới
+  newStatus     String      @map("new_status")
+  changedBy     String      @map("changed_by") @db.Uuid // ref -> Identity Service.users.id
+  changedAt     DateTime    @default(now()) @map("changed_at")
+
+  @@map("appointment_status_history")
+}
