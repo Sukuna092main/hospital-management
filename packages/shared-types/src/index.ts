@@ -108,6 +108,8 @@ export interface Vitals {
   bloodPressure?: string;
   heartRate?: number;
   temperature?: number;
+  heightCm?: number;
+  weightKg?: number;
 }
 
 export interface PrescriptionItem {

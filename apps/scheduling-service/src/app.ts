@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import patientsRoutes from './routes/patients.routes.js';
+import departmentsRoutes from './routes/departments.routes.js';
+import doctorsRoutes from './routes/doctors.routes.js';
 import { errorHandler } from './middlewares/error-handler.middleware.js';
 
 export function createApp() {
@@ -17,6 +19,8 @@ export function createApp() {
   });
 
   app.use('/api/v1/patients', patientsRoutes);
+  app.use('/api/v1/departments', departmentsRoutes);
+  app.use('/api/v1/doctors', doctorsRoutes);
 
   app.use(errorHandler);
   return app;
