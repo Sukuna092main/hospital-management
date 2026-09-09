@@ -5,6 +5,8 @@ import morgan from 'morgan';
 import patientsRoutes from './routes/patients.routes.js';
 import departmentsRoutes from './routes/departments.routes.js';
 import doctorsRoutes from './routes/doctors.routes.js';
+import staffRoutes from './routes/staff.routes.js';
+import schedulesRoutes from './routes/schedules.routes.js';
 import { errorHandler } from './middlewares/error-handler.middleware.js';
 
 export function createApp() {
@@ -21,6 +23,8 @@ export function createApp() {
   app.use('/api/v1/patients', patientsRoutes);
   app.use('/api/v1/departments', departmentsRoutes);
   app.use('/api/v1/doctors', doctorsRoutes);
+  app.use('/api/v1/staff', staffRoutes);
+  app.use('/api/v1/schedules', schedulesRoutes);
 
   app.use(errorHandler);
   return app;
