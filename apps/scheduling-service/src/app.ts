@@ -7,6 +7,7 @@ import departmentsRoutes from './routes/departments.routes.js';
 import doctorsRoutes from './routes/doctors.routes.js';
 import staffRoutes from './routes/staff.routes.js';
 import schedulesRoutes from './routes/schedules.routes.js';
+import appointmentsRoutes from './routes/appointments.routes.js';
 import { errorHandler } from './middlewares/error-handler.middleware.js';
 
 export function createApp() {
@@ -25,6 +26,7 @@ export function createApp() {
   app.use('/api/v1/doctors', doctorsRoutes);
   app.use('/api/v1/staff', staffRoutes);
   app.use('/api/v1/schedules', schedulesRoutes);
+  app.use('/api/v1/appointments', appointmentsRoutes);
 
   app.use(errorHandler);
   return app;
