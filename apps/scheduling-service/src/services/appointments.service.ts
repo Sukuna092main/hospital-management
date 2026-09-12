@@ -3,6 +3,7 @@ import type { UserRoleName } from '@hospital/shared-types';
 import { prisma } from '../lib/prisma.js';
 import { httpError } from '../lib/http-error.js';
 import type { CreateAppointmentInput } from '../schemas/appointments.schema.js';
+import { writeRemoteAudit } from '../lib/audit-client.js';
 
 interface Actor {
   id: string; // Identity users.id từ token
@@ -125,6 +126,22 @@ export async function transitionStatus(actor: Actor, id: string, to: Appointment
       data: { appointmentId: id, oldStatus: appt.status, newStatus: to, changedBy: actor.id },
     }),
   ]);
+
+  if (to === 'CANCELLED') {
+    await writeRemoteAudit({
+      userId: actor.id,
+      action: 'CANCELLED',
+      resourceType: 'APPOINTMENT',
+      resourceId: id,
+      metadata: {
+        oldStatus: appt.status,
+        patientId: appt.patientId,
+        doctorId: appt.doctorId,
+        scheduledAt: appt.scheduledAt.toISOString(),
+      },
+    });
+  }
+
   return getOrThrow(id);
 }
 
